@@ -1,0 +1,262 @@
+#!/bin/csh
+#setenv OPENGGCMDIR $HOME/src/openggcm
+$OPENGGCMDIR/bin/script.runme `pwd` `basename $0` 0; exit
+
+#runstring testcase-const-southIMF-sm-ion
+
+#------------- some top level options ----------------------------
+RUN             default      #  run id, default sets to current dir
+DOSMF           1            #  switch to create parameter database
+DOINP           1            #  switch to create input file
+DOGRD           1            #  switch to create the grid
+KEEPTMP         1            #  switch to keep tmp files for debugging
+BUILDSYSTEM     cmake
+TARGET          marvin
+TARGETHOST      localhost
+TUSER           user         #  user name on remote machine
+RUNTIME         00:20:00     #  CPU limit, only for SDSC,NCSA
+CLASS           normal       #  batch class (plat:standarf|capability)
+MHDCOORD        MHD
+MHDC            true         # DEPRECATED
+MHD             fortran
+DO_LIMIT2       false
+DO_LIMIT3       false
+DO_LEGACY       false
+TIMELO          50.
+
+#-------- this is a good place for libmrc options ----------------
+checkpoint              0    # uses outtime syntax (negative for cadence)
+restart                 0
+ggcm_mhd_diag_fields    rr:pp:v:b:j:e_cc:divb
+assert_clean            true
+class_info_verb         active
+
+#------------- compiling, profiling and debugging ----------------
+# MPIF77          openmpif77
+# MPIF77_FLAGS    -g -O0
+# MPIF90          openmpif90
+# MPIF90_FLAGS    -g -O0
+# MPICC           openmpicc
+# MPIF77_FLAGS    { -g -O2 }
+# MPIF90_FLAGS    { -g -O2 }
+# MPICC_FLAGS     { -g -O2 -I/usr/include/hdf5/serial }
+# CONF_ARGS       { LDFLAGS="-L/usr/lib/x86_64-linux-gnu/hdf5/serial" }
+TARGETPREP      {}
+LOCALF77        gfortran         #  the local f77 compiler
+check_mhdvar    false            #  check mhd variables for sane values every step
+CHECKSUMS       false            #  write checksums to compare code changes
+
+#------------- directories ---------------------------------------
+GGCMDIR         default          # base directory for the code
+OUTDIR          default          # where the output goes
+
+#------------- the code input files ------------------------------
+GLOBU           default      #  code input (utilities), default: latest
+GRIDA           default      #  ditto, grid/x-grid generation
+GRIDB           default      #  ditto, grid/partitioning
+GRIDC           default      #  ditto, grid/mapping coefficients
+MHDSC           default      #  ditto, constants and definitions
+MHDCA           default      #  ditto, MHD core code
+MHDMI           default      #  ditto, MI coupling code/sigmas/CTIM interf.
+IOSOL           default      #  ditto, ionosphere potential solver
+IOPOS           default      #  ditto, ionosphere variables post-prpcessing
+COTR1           default      #  ditto, coord. transf. and time routines
+MACHS           default      #  ditto, machine dependent stuff
+MINVA           default      #  ditto, minimum variance program
+CTIM            none         #  ctim version (1.0.10) or "none" for sigaa2 sigma computation
+# RCMCODE         rice
+
+#-------------- define the grid ------------------------------------
+
+#---------------------------------------------------------------
+#------  grid definition for 'tail1'
+#---------------------------------------------------------------
+npx               6
+npy               2
+npz               2
+nx                120
+ny                36
+nz                36
+dy0               0.5
+dz0               0.5
+xx1              -28.1
+xx2              300.1
+yy2               40.1
+zz2               40.1
+#.... how the x-grid is defined
+#     f = fak*(hm + (h0-hm)*tanhm(b1*(x-x1)) + (hn-hm)*tanhp(b2*(x-x5))
+#    *  - (hm-hmm)*(#one-tanhm(b3*(x-(x3-dmm)))-tanhp(b3*(x-(x3+dmm)))) )
+ggx1              $v="-n   $NX     -x0 $XX1     -xn $XX2 "
+ggx2              $v="-x1  -26     -x3  -4      -dmm  16    -x5   80 "
+ggx3              $v="-h0  2.0     -hn  20      -hm 1.00    -hmm 0.60 "
+ggx4              $v="-b1  0.15    -b2  0.025   -b3  0.3 "
+#.... for tail:
+# ggx1              $v="-n   $NX     -x0 $XX1     -xn $XX2 "
+# ggx2              $v="-x1  -26     -x3   40     -dmm  16    -x5   120 "
+# ggx3              $v="-h0  1.0     -hn   5      -hm 0.60    -hmm 0.60 "
+# ggx4              $v="-b1  0.15    -b2  0.025   -b3  0.3 "
+
+# ggyz1             $v="-xn 30.0  -xm 0.025"
+
+#-------------- resistivity ----------------------------------------
+MAGDIFFU        nl1            # resistivity model res1/nl1
+diffthreshold   0.70           # resistivity threshold
+diffconstant    0.05           # resistivity constant
+d_i             0.0
+
+#-------------- output control -------------------------------------
+# ':' seperated lists, unit is seconds, +val is only that step, -val is modulus
+diags           diags2
+# diagsc_srv      cache
+outputmode      combined
+#hdf5_dir        {{ $ENV{'HDF5_DIR'} }}
+outtimerun      -1200000       # frequency for runtime graphics, 0 if not wanted
+outtime2d       -120
+outtimeio       -120
+outtime3d       -3600
+# outtimeex       1800:1080000:4
+outplanex       10000          # none
+outplaney       0
+outplanez       0              # none
+modtty          1              # output line to log file every modtty
+etajout         false          # E on edge centers, B on face centers
+
+#-------------- time step control ----------------------------------
+RRMIN           0.10           # minimum permitted number density in cm**-3
+SPEEDLIMIT      1500.0         # maximum permitted Alfven speed in km/s
+thx             0.4            # cfl time step factor
+modnewstep      10             # recalculate cfl limit every 'modnewstep' step
+# modrestart      0            #DEPRECATED  # write restart every soso steps
+
+#-------------- Times, Solar Wind / IMF ----------------------------
+##.. UT times, use DIPOLTIME "1967:01:01:00:00:0.0" for generic runs with no dipole tilt
+STARTTIME  1997:01:09:22:00:00.000  # UT when the run starts
+ENDTIME    1997:01:10:22:00:00.000
+DIPOLTIME  1997:01:09:22:00:00.000  # time for dipole orientation
+alphafak   1.00                     # density factor to account for SW alphas
+##
+###...... automatic SW file generation (comment section out if not used)
+SWMON      wi           # solar wind monitor sc (wi/ac/i8/ge/fi), use 'fi' if none
+SWFILE     minvar       # file with SW/IMF, can be auto/minvar
+SETIMFBX   none         #  set Bx to fixed value, or "none"
+INPAVE     30           #  averaging interval for input files, seconds
+IDATA      ./inp        # where the sw/imf data reside
+# SWFILE     swdata
+
+f107       150      # F10.7 solar flux
+MOX        {`tser_getval $IDATA/${SWMON}.xgse $STARTTIME | awk '{printf "%s",\$1;}' `}  # Xgse solar wind monitor position. (def=$v=0.0-$XX1)
+MOY        {`tser_getval $IDATA/${SWMON}.ygse $STARTTIME | awk '{printf "%s",\$1;}' `}  # Ygse solar wind monitor position. (def=0)
+MOZ        {`tser_getval $IDATA/${SWMON}.zgse $STARTTIME | awk '{printf "%s",\$1;}' `}  # Zgse solar wind monitor position. (def=0)
+swturb1    false    # solar wind turbulence (true/false)
+swturb_rr  0.0      # solar wind trbulence random perturbation for density in 1/cc
+swturb_vv  0.0      # solar wind trbulence random perturbation for velocity in km/sec
+
+#-------------- MI coupling and ionosphere -------------------------
+ISPHERE       3.5       # inner boundary radius (RE)
+io_shield_lat 50.0      # ionosphere shielding latitude
+BND_IO_RR     0.2       # density at inner boundary in cc
+BND_IO_TT     400       # temperature at inner bndry in eV
+NTHETA        361       # ionosphere grid latitude points
+NPHI          121       # ionosphere grid longitude points
+NIOX          40        # no of panels in theta for one hemisphere
+NIOY          8         # no of modes in phi
+NIOGO         4         # order of gauss legendre integration
+njslide       2         # fac sliding time averages
+modiono       20        # DEPRECATED  # recalc ionosphere every soso step
+sigmatrans    3000000   # after which timestep begin transition to s-c sigma
+sig_const     5.0       # constant sigma for startup
+sigmafak      1.0       # factor to multiply all ionosphere conductances
+mape1         1.0       # MI coupling factor for mapped E
+fac_filt      2         # how often to spatially filter FAC
+sig_floor     0.5       # minimum sigmas
+fak_fac_dyn   1.0       # factor for dynamo currents (only w/ctim)
+sig_smooth    2         # spatially smoothing sigmas
+sig_h_back    0.1
+sig_p_back    0.5       # nightside H/P background conductances
+sigfac_fak    1.0       # fudge factor for discrete e-flux
+sigdif_fak    1.0       # fudge factor for diffuse  e-flux
+
+BIGDIM        4000000   # global memory
+
+#-------------- CTIM inputs ----------------------------------------
+ctim_potfak       0.6   # factor for driving ctim potential
+#CTIM_IN           ./
+CTIM_IN           ctim-indata
+ctim_f_prsxxxx    {"$CTIM_IN/inp_ctim.fields.20000921000.asc"}
+ctim_f_mmmxxxx    {"$CTIM_IN/inp_ctim.mmm20000921000"}
+ctim_f_velxxxx    {"$CTIM_IN/inp_ctim.vel20000921000"}
+ctim_f_bmagfld    {"$CTIM_IN/inp_ctim.bmagfld"}
+ctim_f_substorm   {"$CTIM_IN/inp_ctim.substorm"}
+ctim_f_cormag     {"$CTIM_IN/inp_ctim.cormag"}
+ctim_f_datam      {"$CTIM_IN/inp_ctim.datam"}
+ctim_f_levpi      {"$CTIM_IN/inp_ctim.levpi"}
+ctim_f_gwatts     {"$CTIM_IN/inp_ctim.gwatts"}
+ctim_f_cpcpd      {"$CTIM_IN/inp_ctim.cpcpd"}
+ctim_f_ionprof    {"$CTIM_IN/inp_ctim.ionprof"}
+ctim_f_prof2      {"$CTIM_IN/inp_ctim.prof2"}
+ctim_f_dmsp       {"$CTIM_IN/inp_ctim.dmsp"}
+ctim_f_holt       {"$CTIM_IN/inp_ctim.holt"}
+ctim_f_dmspmod    {"$CTIM_IN/inp_ctim.dmspmod"}
+ctim_f_rice91     {"$CTIM_IN/inp_ctim.rice91"}
+ctim_f_riceprof   {"$CTIM_IN/inp_ctim.riceprof"}
+ctim_f_hprof      {"$CTIM_IN/inp_ctim.hprof"}
+ctim_f_hough      {"$CTIM_IN/inp_ctim.hough"}
+ctim_f_inshaun    {"$CTIM_IN/inp_ctim.d1d2"}
+ctim_i10          5       # i10 is the smothing frequency.
+ctim_i5           1       # i5 is mwt calling frequency.
+ctim_i8           6       # i8 is shaun frequency.
+ctim_windmx       1000.0  # maximum wind
+ctim_tmpmin       130.0   # minimum temperature
+ctim_ampl22       608.0   # amplitudes of the tidal model
+ctim_ampl23       500.0
+ctim_ampl24       138.0
+ctim_ampl25       138.0
+ctim_ampl11       200.0
+ctim_phase22      9.6     # phases of tidal model.
+ctim_phase23      4.6
+ctim_phase24      1.2
+ctim_phase25      2.2
+ctim_phase11      12.0
+ctim_kp           3       # kp index
+ctim_xx           91      # global setting???
+ctim_amp          1.3     # ratio of E foster field to real E field.
+ctim_switch_1     1       # ctim boolean switches
+ctim_switch_2     1
+ctim_switch_3     0
+ctim_switch_4     1
+ctim_switch_5     0
+ctim_switch_6     0
+ctim_switch_7     1
+ctim_switch_8     1
+ctim_switch_9     1
+ctim_switch_10    1
+ctim_switch_11    0
+ctim_switch_12    0
+ctim_switch_13    1
+ctim_switch_14    1
+ctim_switch_15    1
+ctim_switch_16    1
+ctim_switch_17    0
+ctim_switch_18    0
+ctim_switch_19    0
+ctim_switch_20    0
+ctim_switch_21    0
+ctim_switch_22    0
+ctim_switch_23    0
+ctim_switch_24    1
+ctim_switch_25    1
+ctim_switch_26    1
+ctim_switch_27    1
+ctim_switch_28    1
+ctim_switch_30    0
+ctim_switch_31    0
+ctim_switch_32    1
+ctim_switch_33    0
+ctim_switch_34    0
+ctim_switch_35    0
+ctim_switch_37    1
+#-------------------------- The End ------------------------------------
+
+SATOUT          default    # /home/ggcm/GGCM/OpenGGCM_v3.0/src/mhd-satout.for
+orbitfile       orbits.txt
+orbit_dt        5
